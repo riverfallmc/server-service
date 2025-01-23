@@ -1,0 +1,131 @@
+#![allow(dead_code)]
+
+use anyhow::{anyhow, Context};
+use axum::{http::StatusCode, Json};
+use dixxxie::{connection::DbPooled, response::{HttpError, HttpMessage, HttpResult}};
+use once_cell::sync::Lazy;
+use tokio::sync::Mutex;
+use crate::{models::client::{Client, ClientAdd, ClientUpdate}, repository::client::ClientRepository};
+
+pub type ClientList = Vec<Client>;
+
+static CLIENT_LIST: Lazy<Mutex<ClientList>> = Lazy::new(|| Mutex::new(ClientList::new()));
+
+pub struct ClientService;
+
+impl ClientService {
+  /// Возвращает текущий список серверов
+  pub async fn get_client_list() -> ClientList {
+    // ну чёт копирование вектора ну чёт такооооое
+    CLIENT_LIST.lock().await.clone()
+  }
+
+  pub async fn get_client(
+    id: i32
+  ) -> HttpResult<Client> {
+    let list = Self::get_client_list()
+      .await;
+
+    Ok(list.get(id as usize)
+      .ok_or_else(|| HttpError::new("Запрошенный клиент не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned())
+  }
+
+  pub async fn get_client_by_name(
+    name: String
+  ) -> HttpResult<Client> {
+    let list = Self::get_client_list()
+      .await;
+
+    Ok(list.iter().find(|v| v.name == name)
+      .ok_or_else(|| HttpError::new("Запрошенный клиент не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned())
+  }
+
+
+  pub async fn client_exists(
+    name: String
+  ) -> HttpResult<Client> {
+      // проверяем что клиент есть в бд
+      // из нашего кэээша (не томми)
+    ClientService::get_client_by_name(name)
+      .await
+      .map_err(|_| HttpError::new("Клиент не существует", Some(StatusCode::CONFLICT)))
+  }
+
+  pub async fn set_client_list(
+    list: ClientList
+  ) {
+    *CLIENT_LIST.lock().await = list;
+  }
+
+  pub async fn load_client_list(
+    db: &mut DbPooled
+  ) -> HttpResult<()> {
+    let list = ClientRepository::load(db)?;
+
+    Self::set_client_list(list)
+      .await;
+
+    Ok(())
+  }
+
+  /// Добавляет клиент
+  pub async fn add_client(
+    db: &mut DbPooled,
+    client: ClientAdd
+  ) -> HttpResult<Json<HttpMessage>> {
+    let mut list = CLIENT_LIST.lock()
+      .await;
+
+    let id = ClientRepository::add(db, &client)
+      .map_err(|e| anyhow!("Не получилось добавить клиент: {e:?}"))?;
+
+    list.push(client.with_id(id));
+
+    Ok(Json(HttpMessage::new(&format!("Клиент был успешно добавлен, и получил Id {id}"))))
+  }
+
+  pub async fn update_client(
+    db: &mut DbPooled,
+    id: i32,
+    patch: ClientUpdate
+  ) -> HttpResult<Json<HttpMessage>> {
+    let mut list = CLIENT_LIST.lock()
+      .await;
+
+    let server = ClientRepository::set(db, id, patch)
+      .map_err(|e| anyhow!("Не получилось обновить клиент: {e:?}"))?;
+
+    if let Some(index) = list.iter().position(|v| v.id == id) {
+      list.insert(index, server);
+    }
+
+    Ok(Json(HttpMessage::new("Клиент был успешно обновлён")))
+  }
+
+  pub async fn delete_client(
+    db: &mut DbPooled,
+    id: i32,
+  ) -> HttpResult<Json<HttpMessage>> {
+    let mut list = CLIENT_LIST.lock()
+      .await;
+
+    let name = list.iter().find(|client| client.id == id)
+      .context(anyhow::anyhow!("Клиент не был найден в кэше"))?
+      .clone()
+      .name;
+
+    // проверяем то, что этот клиент не использует ни один сервер
+    if ClientRepository::find_uses(db, name)? > 0 {
+      return Err(HttpError::new("Не получилось удалить клиент: он используется", Some(StatusCode::CONFLICT)))
+    }
+
+    ClientRepository::delete(db, id)
+      .map_err(|e| anyhow!("Не получилось удалить клиент: {e:?}"))?;
+
+    if let Some(index) = list.iter().position(|v| v.id == id) {
+      list.remove(index);
+    }
+
+    Ok(Json(HttpMessage::new("Клиент был успешно удалён")))
+  }
+}
