@@ -18,7 +18,11 @@ pub struct Server {
   #[diesel(sql_type = diesel::sql_types::Jsonb)]
   pub online: serde_json::Value,
   #[diesel(sql_type = diesel::sql_types::Text)]
-  pub ip: String
+  pub ip: String,
+  #[diesel(sql_type = diesel::sql_types::Text)]
+  pub icon: String,
+  #[diesel(sql_type = diesel::sql_types::Text)]
+  pub background: String
 }
 
 #[derive(Insertable, Deserialize, Serialize, Clone)]
@@ -36,6 +40,10 @@ pub struct ServerAdd {
   #[serde(skip_deserializing, default = "default_online")]
   #[diesel(sql_type = diesel::sql_types::Jsonb)]
   pub online: serde_json::Value,
+  #[diesel(sql_type = diesel::sql_types::Text)]
+  pub icon: String,
+  #[diesel(sql_type = diesel::sql_types::Text)]
+  pub background: String,
 }
 
 #[derive(Serialize, Deserialize, AsChangeset)]
@@ -44,6 +52,8 @@ pub struct ServerUpdate {
   pub name: Option<String>,
   pub client: Option<String>,
   pub ip: Option<String>,
+  pub icon: String,
+  pub background: String,
 }
 
 fn default_enabled() -> bool { false }
@@ -63,7 +73,9 @@ impl ServerAdd {
       enabled: self.enabled,
       client: self.client,
       online: self.online,
-      ip: self.ip
+      ip: self.ip,
+      icon: self.icon,
+      background: self.background
     }
   }
 }

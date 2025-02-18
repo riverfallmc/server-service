@@ -1,6 +1,12 @@
-use axum::{extract::{Path, State}, routing::{delete, get, patch, post}, Json};
+use axum::{extract::{Path, Query, State}, routing::{delete, get, patch, post}, Json};
 use dixxxie::{controller::Controller, response::{HttpMessage, HttpResult}};
+use serde::Deserialize;
 use crate::{models::client::{Client, ClientAdd, ClientUpdate}, service::client::{ClientList, ClientService}, AppState};
+
+#[derive(Deserialize)]
+struct NameQuery {
+  name: String
+}
 
 pub struct ClientController;
 
@@ -15,6 +21,12 @@ impl ClientController {
   ) -> HttpResult<Json<Client>> {
     Ok(Json(ClientService::get_client(id)
       .await?))
+  }
+
+  async fn get_client_by_name(
+    Query(query): Query<NameQuery>
+  ) -> HttpResult<Json<Client>> {
+    Ok(Json(ClientService::get_client_by_name(query.name).await?))
   }
 
   async fn add_client(
@@ -55,6 +67,7 @@ impl Controller<AppState> for ClientController {
     router
       .route("/clients", get(Self::get_client_list))
       .route("/client/{id}", get(Self::get_client))
+      .route("/client", get(Self::get_client_by_name))
       // добавление клиента
       .route("/client", post(Self::add_client))
       // патч клиента

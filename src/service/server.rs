@@ -6,7 +6,6 @@ use dixxxie::{connection::DbPooled, response::{HttpError, HttpMessage, HttpResul
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use crate::{models::server::{Server, ServerAdd, ServerUpdate}, repository::server::ServerRepository};
-
 use super::client::ClientService;
 
 pub type ServerList = Vec<Server>;
@@ -81,11 +80,12 @@ impl ServerService {
         .await?;
     }
 
-    let server = ServerRepository::set(db, id, patch)
-      .map_err(|e| anyhow!("Не получилось обновить сервер: {e:?}"))?;
+    let server = ServerRepository::set(db, id, patch)?;
 
     if let Some(index) = list.iter().position(|v| v.id == id) {
-      list.insert(index, server);
+      if let Some(value) = list.get_mut(index) {
+        *value = server;
+      }
     }
 
     Ok(Json(HttpMessage::new("Сервер был успешно обновлён")))

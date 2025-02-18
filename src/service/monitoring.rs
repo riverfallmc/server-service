@@ -42,7 +42,8 @@ impl MonitoringService {
         for server in server_list.iter_mut() {
           let updated = match Self::fetch_server_data(server.ip.clone()).await {
             Ok(data) => data,
-            Err(_) => {
+            Err(e) => {
+              log::debug!("Received an error when receiving data from the server: {e}");
               server.enabled = false;
               continue;
             }
@@ -54,6 +55,8 @@ impl MonitoringService {
 
         ServerService::set_server_list(server_list)
           .await;
+
+        log::debug!("Server list updated");
 
         // спим haxooooy
         tokio::time::sleep(std::time::Duration::from_secs(MONITORING_CHECK_INTERVAL as u64)).await;

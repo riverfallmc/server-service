@@ -4,6 +4,7 @@ diesel::table! {
     client (id) {
         id -> Int4,
         name -> Text,
+        description -> Text,
         modloader -> Text,
         version -> Text,
         mods -> Array<Nullable<Text>>,
@@ -18,6 +19,8 @@ diesel::table! {
         client -> Text,
         online -> Jsonb,
         ip -> Text,
+        icon -> Text,
+        background -> Text,
     }
 }
 
