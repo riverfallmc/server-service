@@ -13,7 +13,7 @@ tasks:
   build:
     description: Builds image of service
     commands:
-      - sudo docker build -t ${service}-service .
+      - docker build -t ${service}-service .
 
   restart:
     description: Restarts backend
@@ -28,7 +28,7 @@ tasks:
   deploy:
     description: Builds a image, and push it to the registry
     commands:
-      - puff build && puff pushimage
+      - puff build && puff tagimage && puff pushimage
 
   pushimage:
     description: Pushes the image to the registry

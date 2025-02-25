@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 
-use crate::models::Online;
-use dixxxie::response::{HttpError, HttpResult};
+use crate::{models::Online, service::server::ServerService};
+use adjust::response::{HttpError, HttpResult};
+use axum::Json;
 use mc_query::status::status_with_timeout;
-use super::server::ServerService;
 
 /// Промежуток времени (в секундах), в которое поток мониторинга будет проверять все сервера
 /// Для меньшей нагрузки можно поставить 20, 25, 30 секунд. Больше не советую
-const MONITORING_CHECK_INTERVAL: u8 = 15;
+const MONITORING_CHECK_INTERVAL: u8 = 5;
 
 pub struct MonitoringService {}
 
@@ -27,10 +27,10 @@ impl MonitoringService {
     let stats = status_with_timeout(endpoint.first().unwrap(), endpoint.get(1).unwrap_or(&"25565").parse()?, std::time::Duration::from_secs(5))
       .await?;
 
-    Ok(Online {
+    Ok(Json(Online {
       current: stats.players.online as i16,
       max: stats.players.max as i16
-    })
+    }))
   }
 
   /// Спавнит поток, который будет следить за серверами каждые MONITORING_CHECK_INTERVAL секунд
@@ -50,7 +50,7 @@ impl MonitoringService {
           };
 
           server.enabled = true;
-          server.online = serde_json::to_value(updated).unwrap_or_default();
+          server.online = serde_json::to_value((*updated).clone()).unwrap_or_default();
         }
 
         ServerService::set_server_list(server_list)

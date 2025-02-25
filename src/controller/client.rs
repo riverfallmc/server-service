@@ -1,5 +1,5 @@
 use axum::{extract::{Path, Query, State}, routing::{delete, get, patch, post}, Json};
-use dixxxie::{controller::Controller, response::{HttpMessage, HttpResult}};
+use adjust::{controller::Controller, response::{HttpMessage, HttpResult}};
 use serde::Deserialize;
 use crate::{models::client::{Client, ClientAdd, ClientUpdate}, service::client::{ClientList, ClientService}, AppState};
 
@@ -18,21 +18,22 @@ impl ClientController {
 
   async fn get_client(
     Path(id): Path<i32>,
-  ) -> HttpResult<Json<Client>> {
-    Ok(Json(ClientService::get_client(id)
-      .await?))
+  ) -> HttpResult<Client> {
+    ClientService::get_client(id)
+      .await
   }
 
   async fn get_client_by_name(
     Query(query): Query<NameQuery>
-  ) -> HttpResult<Json<Client>> {
-    Ok(Json(ClientService::get_client_by_name(query.name).await?))
+  ) -> HttpResult<Client> {
+    ClientService::get_client_by_name(query.name)
+      .await
   }
 
   async fn add_client(
     State(state): State<AppState>,
     Json(client): Json<ClientAdd>
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut db = state.postgres
       .get()?;
 
@@ -44,7 +45,7 @@ impl ClientController {
     State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(patch): Json<ClientUpdate>
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut db = state.postgres.get()?;
 
     ClientService::update_client(&mut db, id, patch)
@@ -54,7 +55,7 @@ impl ClientController {
   async fn delete_server(
     State(state): State<AppState>,
     Path(id): Path<i32>
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut db = state.postgres.get()?;
 
     ClientService::delete_client(&mut db, id)
@@ -63,6 +64,10 @@ impl ClientController {
 }
 
 impl Controller<AppState> for ClientController {
+  fn new() -> anyhow::Result<Box<Self>> {
+    Ok(Box::new(Self))
+  }
+
   fn register(&self, router: axum::Router<AppState>) -> axum::Router<AppState> {
     router
       .route("/clients", get(Self::get_client_list))

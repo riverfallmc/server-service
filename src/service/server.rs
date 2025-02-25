@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use adjust::{database::{postgres::Postgres, Database}, response::{HttpError, HttpMessage, HttpResult}};
 use anyhow::anyhow;
 use axum::{http::StatusCode, Json};
-use dixxxie::{connection::DbPooled, response::{HttpError, HttpMessage, HttpResult}};
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use crate::{models::server::{Server, ServerAdd, ServerUpdate}, repository::server::ServerRepository};
@@ -27,8 +27,8 @@ impl ServerService {
     let list = Self::get_server_list()
       .await;
 
-    Ok(list.get(id as usize)
-      .ok_or_else(|| HttpError::new("Запрошенный сервер не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned())
+    Ok(Json(list.get(id as usize)
+      .ok_or_else(|| HttpError::new("Запрошенный сервер не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned()))
   }
 
   pub async fn set_server_list(
@@ -38,44 +38,46 @@ impl ServerService {
   }
 
   pub async fn load_server_list(
-    db: &mut DbPooled
+    db: &mut Database<Postgres>
   ) -> HttpResult<()> {
     let list = ServerRepository::load(db)?;
 
-    Self::set_server_list(list)
+    Self::set_server_list((*list).clone())
       .await;
 
-    Ok(())
+    Ok(Json(()))
   }
 
   /// Добавляет сервер в мониторинг
   pub async fn add_server(
-    db: &mut DbPooled,
+    db: &mut Database<Postgres>,
     server: ServerAdd
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut list = SERVER_LIST.lock()
       .await;
 
+    #[allow(unused)]
     ClientService::client_exists(server.client.clone())
       .await?;
 
     let id = ServerRepository::add(db, &server)
       .map_err(|e| anyhow!("Не получилось добавить сервер: {e:?}"))?;
 
-    list.push(server.with_id(id));
+    list.push(server.with_id(*id));
 
-    Ok(Json(HttpMessage::new(&format!("Сервер был успешно добавлен, и получил Id {id}"))))
+    Ok(Json(HttpMessage::new(&format!("Сервер был успешно добавлен, и получил Id {}", *id))))
   }
 
   pub async fn update_server(
-    db: &mut DbPooled,
+    db: &mut Database<Postgres>,
     id: i32,
     patch: ServerUpdate
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut list = SERVER_LIST.lock()
       .await;
 
     if patch.client.is_some() {
+      #[allow(unused)]
       ClientService::client_exists(patch.client.clone().unwrap())
         .await?;
     }
@@ -84,7 +86,7 @@ impl ServerService {
 
     if let Some(index) = list.iter().position(|v| v.id == id) {
       if let Some(value) = list.get_mut(index) {
-        *value = server;
+        *value = (*server).clone();
       }
     }
 
@@ -92,12 +94,13 @@ impl ServerService {
   }
 
   pub async fn delete_server(
-    db: &mut DbPooled,
+    db: &mut Database<Postgres>,
     id: i32,
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut list = SERVER_LIST.lock()
       .await;
 
+    #[allow(unused)]
     ServerRepository::delete(db, id)
       .map_err(|e| anyhow!("Не получилось удалить сервер: {e:?}"))?;
 

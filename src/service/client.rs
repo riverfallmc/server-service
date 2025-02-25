@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use adjust::{database::{postgres::Postgres, Database}, response::{HttpError, HttpMessage, HttpResult}};
 use anyhow::{anyhow, Context};
 use axum::{http::StatusCode, Json};
-use dixxxie::{connection::DbPooled, response::{HttpError, HttpMessage, HttpResult}};
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 use crate::{models::client::{Client, ClientAdd, ClientUpdate}, repository::client::ClientRepository};
@@ -26,8 +26,8 @@ impl ClientService {
     let list = Self::get_client_list()
       .await;
 
-    Ok(list.get(id as usize)
-      .ok_or_else(|| HttpError::new("Запрошенный клиент не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned())
+    Ok(Json(list.get(id as usize)
+      .ok_or_else(|| HttpError::new("Запрошенный клиент не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned()))
   }
 
   pub async fn get_client_by_name(
@@ -36,8 +36,8 @@ impl ClientService {
     let list = Self::get_client_list()
       .await;
 
-    Ok(list.iter().find(|v| v.name == name)
-      .ok_or_else(|| HttpError::new("Запрошенный клиент не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned())
+    Ok(Json(list.iter().find(|v| v.name == name)
+      .ok_or_else(|| HttpError::new("Запрошенный клиент не был найден", Some(StatusCode::NOT_FOUND)))?.to_owned()))
   }
 
 
@@ -58,37 +58,37 @@ impl ClientService {
   }
 
   pub async fn load_client_list(
-    db: &mut DbPooled
+    db: &mut Database<Postgres>
   ) -> HttpResult<()> {
     let list = ClientRepository::load(db)?;
 
-    Self::set_client_list(list)
+    Self::set_client_list(list.to_vec())
       .await;
 
-    Ok(())
+    Ok(Json(()))
   }
 
   /// Добавляет клиент
   pub async fn add_client(
-    db: &mut DbPooled,
+    db: &mut Database<Postgres>,
     client: ClientAdd
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut list = CLIENT_LIST.lock()
       .await;
 
     let id = ClientRepository::add(db, &client)
       .map_err(|e| anyhow!("Не получилось добавить клиент: {e:?}"))?;
 
-    list.push(client.with_id(id));
+    list.push(client.with_id(*id));
 
-    Ok(Json(HttpMessage::new(&format!("Клиент был успешно добавлен, и получил Id {id}"))))
+    Ok(Json(HttpMessage::new(&format!("Клиент был успешно добавлен, и получил Id {}", *id))))
   }
 
   pub async fn update_client(
-    db: &mut DbPooled,
+    db: &mut Database<Postgres>,
     id: i32,
     patch: ClientUpdate
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut list = CLIENT_LIST.lock()
       .await;
 
@@ -96,16 +96,16 @@ impl ClientService {
       .map_err(|e| anyhow!("Не получилось обновить клиент: {e:?}"))?;
 
     if let Some(index) = list.iter().position(|v| v.id == id) {
-      list.insert(index, server);
+      list.insert(index, (*server).clone());
     }
 
     Ok(Json(HttpMessage::new("Клиент был успешно обновлён")))
   }
 
   pub async fn delete_client(
-    db: &mut DbPooled,
+    db: &mut Database<Postgres>,
     id: i32,
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut list = CLIENT_LIST.lock()
       .await;
 
@@ -115,10 +115,11 @@ impl ClientService {
       .name;
 
     // проверяем то, что этот клиент не использует ни один сервер
-    if ClientRepository::find_uses(db, name)? > 0 {
+    if *ClientRepository::find_uses(db, name)? > 0 {
       return Err(HttpError::new("Не получилось удалить клиент: он используется", Some(StatusCode::CONFLICT)))
     }
 
+    #[allow(unused)]
     ClientRepository::delete(db, id)
       .map_err(|e| anyhow!("Не получилось удалить клиент: {e:?}"))?;
 

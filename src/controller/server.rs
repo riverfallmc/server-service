@@ -1,5 +1,5 @@
 use axum::{extract::{Path, State}, routing::{delete, get, patch, post}, Json};
-use dixxxie::{controller::Controller, response::{HttpMessage, HttpResult}};
+use adjust::{controller::Controller, response::{HttpMessage, HttpResult}};
 use crate::{models::server::{Server, ServerAdd, ServerUpdate}, service::server::{ServerList, ServerService}, AppState};
 
 pub struct ServerController;
@@ -12,15 +12,15 @@ impl ServerController {
 
   async fn get_server(
     Path(id): Path<i32>
-  ) -> HttpResult<Json<Server>> {
-    Ok(Json(ServerService::get_server(id)
-      .await?))
+  ) -> HttpResult<Server> {
+    ServerService::get_server(id)
+      .await
   }
 
   async fn add_server(
     State(state): State<AppState>,
     Json(server): Json<ServerAdd>
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut db = state.postgres
       .get()?;
 
@@ -32,7 +32,7 @@ impl ServerController {
     State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(patch): Json<ServerUpdate>
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut db = state.postgres.get()?;
 
     ServerService::update_server(&mut db, id, patch)
@@ -42,7 +42,7 @@ impl ServerController {
   async fn delete_server(
     State(state): State<AppState>,
     Path(id): Path<i32>
-  ) -> HttpResult<Json<HttpMessage>> {
+  ) -> HttpResult<HttpMessage> {
     let mut db = state.postgres.get()?;
 
     ServerService::delete_server(&mut db, id)
@@ -61,5 +61,9 @@ impl Controller<AppState> for ServerController {
       .route("/server/{id}", patch(Self::update_server))
       // удаление сервера
       .route("/server/{id}", delete(Self::delete_server))
+  }
+
+  fn new() -> anyhow::Result<Box<Self>> {
+    Ok(Box::new(Self))
   }
 }
