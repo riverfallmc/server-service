@@ -52,8 +52,8 @@ pub struct ServerUpdate {
   pub name: Option<String>,
   pub client: Option<String>,
   pub ip: Option<String>,
-  pub icon: String,
-  pub background: String,
+  pub icon: Option<String>,
+  pub background: Option<String>,
 }
 
 fn default_enabled() -> bool { false }
