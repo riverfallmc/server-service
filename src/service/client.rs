@@ -79,9 +79,9 @@ impl ClientService {
     let id = ClientRepository::add(db, &client)
       .map_err(|e| anyhow!("Не получилось добавить клиент: {e:?}"))?;
 
-    list.push(client.with_id(*id));
+    list.push(client.with_id(id));
 
-    Ok(Json(HttpMessage::new(&format!("Клиент был успешно добавлен, и получил Id {}", *id))))
+    Ok(Json(HttpMessage::new(&format!("Клиент был успешно добавлен, и получил Id {id}"))))
   }
 
   pub async fn update_client(
@@ -92,11 +92,13 @@ impl ClientService {
     let mut list = CLIENT_LIST.lock()
       .await;
 
-    let server = ClientRepository::set(db, id, patch)
+    let client = ClientRepository::set(db, id, patch)
       .map_err(|e| anyhow!("Не получилось обновить клиент: {e:?}"))?;
 
     if let Some(index) = list.iter().position(|v| v.id == id) {
-      list.insert(index, (*server).clone());
+      if let Some(value) = list.get_mut(index) {
+        *value = client.clone();
+      }
     }
 
     Ok(Json(HttpMessage::new("Клиент был успешно обновлён")))
@@ -115,7 +117,7 @@ impl ClientService {
       .name;
 
     // проверяем то, что этот клиент не использует ни один сервер
-    if *ClientRepository::find_uses(db, name)? > 0 {
+    if ClientRepository::find_uses(db, name)? > 0 {
       return Err(HttpError::new("Не получилось удалить клиент: он используется", Some(StatusCode::CONFLICT)))
     }
 

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use adjust::{database::{postgres::Postgres, Database}, response::{HttpError, HttpResult}};
-use axum::{http::StatusCode, Json};
+use adjust::{database::{postgres::Postgres, Database}, response::{HttpError, NonJsonHttpResult}};
+use axum::http::StatusCode;
 use diesel::{dsl::count, insert_into, upsert::excluded, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use crate::{models::client::{Client, ClientAdd, ClientUpdate}, schema::{client, server}, service::client::ClientList};
 
@@ -11,55 +11,55 @@ impl ClientRepository {
   pub fn add(
     db: &mut Database<Postgres>,
     client: &ClientAdd
-  ) -> HttpResult<i32> {
+  ) -> NonJsonHttpResult<i32> {
     let result = insert_into(client::table)
       .values(client)
       .get_result::<Client>(db)?;
 
-    Ok(Json(result.id))
+    Ok(result.id)
   }
 
   pub fn get(
     db: &mut Database<Postgres>,
     id: i32
-  ) -> HttpResult<Client> {
-    Ok(axum::Json(client::table
+  ) -> NonJsonHttpResult<Client> {
+    Ok(client::table
       .filter(client::columns::id.eq(id))
-      .first::<Client>(db)?))
+      .first::<Client>(db)?)
   }
 
   pub fn set(
     db: &mut Database<Postgres>,
     id: i32,
     patch: ClientUpdate
-  ) -> HttpResult<Client> {
-    Ok(Json(diesel::update(client::table.filter(client::id.eq(id)))
+  ) -> NonJsonHttpResult<Client> {
+    Ok(diesel::update(client::table.filter(client::id.eq(id)))
       .set(patch)
       .get_result(db)
-      .map_err(|_| HttpError::new("Не получилось обновить сервер", Some(StatusCode::BAD_REQUEST)))?))
+      .map_err(|_| HttpError::new("Не получилось обновить сервер", Some(StatusCode::BAD_REQUEST)))?)
   }
 
   pub fn delete(
     db: &mut Database<Postgres>,
     id: i32
-  ) -> HttpResult<usize> {
-    Ok(Json(diesel::delete(client::table.filter(client::id.eq(id)))
+  ) -> NonJsonHttpResult<usize> {
+    Ok(diesel::delete(client::table.filter(client::id.eq(id)))
       .execute(db)
-      .map_err(|_| HttpError::new("Не получилось удалить сервер", Some(StatusCode::BAD_REQUEST)))?))
+      .map_err(|_| HttpError::new("Не получилось удалить сервер", Some(StatusCode::BAD_REQUEST)))?)
   }
 
   pub fn load(
     db: &mut Database<Postgres>,
-  ) -> HttpResult<ClientList> {
-    Ok(Json(client::table
+  ) -> NonJsonHttpResult<ClientList> {
+    Ok(client::table
       .select(Client::as_select())
-      .load(db)?))
+      .load(db)?)
   }
 
   pub fn save(
     db: &mut Database<Postgres>,
     list: ClientList
-  ) -> HttpResult<()> {
+  ) -> NonJsonHttpResult<()> {
     insert_into(client::table)
       .values(list)
       .on_conflict(client::columns::id)
@@ -73,16 +73,16 @@ impl ClientRepository {
       ))
       .execute(db)?;
 
-    Ok(Json(()))
+    Ok(())
   }
 
   pub fn find_uses(
     db: &mut Database<Postgres>,
     client: String
-  ) -> HttpResult<i64> {
-    Ok(Json(server::table
+  ) -> NonJsonHttpResult<i64> {
+    Ok(server::table
       .filter(server::client.eq(client))
       .select(count(server::client))
-      .first(db)?))
+      .first(db)?)
   }
 }
